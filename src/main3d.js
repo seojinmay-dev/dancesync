@@ -92,7 +92,7 @@ const calibrationButton =
   document.createElement('button');
 
 calibrationButton.innerText =
-  '3초 후 전신 보정';
+  '5초 후 전신 보정';
 
 calibrationButton.style.position =
   'absolute';
@@ -167,54 +167,6 @@ countdown.style.textShadow =
 
 document.body.appendChild(
   countdown
-);
-
-// =====================================================
-// Debug Panel
-// =====================================================
-
-const debugPanel =
-  document.createElement('pre');
-
-debugPanel.style.position = 'absolute';
-debugPanel.style.right = '20px';
-debugPanel.style.top = '20px';
-debugPanel.style.zIndex = '100';
-
-debugPanel.style.padding = '20px';
-
-debugPanel.style.background =
-  'rgba(0, 0, 0, 0.85)';
-
-debugPanel.style.color =
-  '#00ff88';
-
-debugPanel.style.borderRadius =
-  '12px';
-
-debugPanel.style.fontFamily =
-  'monospace';
-
-// 핵심
-debugPanel.style.fontSize =
-  '40px';
-
-debugPanel.style.fontWeight =
-  'bold';
-
-debugPanel.style.lineHeight =
-  '1.5';
-
-debugPanel.style.pointerEvents =
-  'none';
-
-debugPanel.innerText =
-`PELVIS DEBUG
-
-waiting...`;
-
-document.body.appendChild(
-  debugPanel
 );
 
 // =====================================================
@@ -294,7 +246,7 @@ function startCalibration() {
     true;
 
   let count =
-    3;
+    5;
 
   countdown.style.display =
     'block';
@@ -503,45 +455,6 @@ function detectPose() {
 }
 
 // =====================================================
-// Debug Panel Update
-// =====================================================
-
-function updateDebugPanel() {
-  const debug =
-    retargeter.getDebugState?.();
-
-  const pelvis =
-    debug?.pelvis;
-
-  if (!pelvis) {
-    debugPanel.innerText =
-      'NO DEBUG DATA';
-
-    return;
-  }
-
-  const safe = (value) => {
-    if (
-      typeof value !== 'number' ||
-      Number.isNaN(value)
-    ) {
-      return '---';
-    }
-
-    return value.toFixed(3);
-  };
-
-  debugPanel.innerText =
-`HIP DEBUG
-
-dx      ${safe(pelvis.dx)}
-dy      ${safe(pelvis.dy)}
-
-actualX ${safe(pelvis.actualX)}
-actualY ${safe(pelvis.actualY)}`;
-}
-
-// =====================================================
 // Animation Loop
 // =====================================================
 
@@ -555,9 +468,6 @@ function animate() {
 
   // 캐릭터 smoothing / bone 적용
   retargeter.update();
-
-  // 디버그 표시
-  updateDebugPanel();
 
   // OrbitControls
   three.controls.update();

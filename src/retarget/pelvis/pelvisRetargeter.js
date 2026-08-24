@@ -40,23 +40,37 @@ export function createPelvisRetargeter(
     );
   }
 
-  // =====================================================
-  // Model Root Position
-  //
-  // ⭐ 핵심
-  //
-  // 이전:
-  // hips.position
-  //
-  // 현재:
-  // character.model.position
-  // =====================================================
+  // Hips와 모든 SkinnedMesh를 함께 포함하는 가장 가까운 조상을 찾는다.
+  // X Bot GLB에서는 Scene wrapper가 아니라 scale 0.01의 Armature다.
+  let motionRoot = hips;
 
-  const modelRestPosition =
-    character.model.position.clone();
+  while (motionRoot.parent) {
+    motionRoot = motionRoot.parent;
 
-  const modelTargetPosition =
-    character.model.position.clone();
+    let hasSkinnedMesh = false;
+    motionRoot.traverse((object) => {
+      hasSkinnedMesh ||= object.isSkinnedMesh === true;
+    });
+
+    if (hasSkinnedMesh) {
+      break;
+    }
+  }
+
+  if (!motionRoot.parent) {
+    throw new Error(
+      'Hips와 SkinnedMesh의 공통 motion root를 찾지 못했습니다.'
+    );
+  }
+
+  const rootRestPosition =
+    motionRoot.position.clone();
+
+  const rootTargetPosition =
+    motionRoot.position.clone();
+
+  const rootRestWorldPosition =
+    new THREE.Vector3();
 
   // =====================================================
   // Calibration
@@ -77,6 +91,10 @@ export function createPelvisRetargeter(
 
   character.model.updateMatrixWorld(
     true
+  );
+
+  motionRoot.getWorldPosition(
+    rootRestWorldPosition
   );
 
   const hipsWorldPosition =
@@ -139,6 +157,13 @@ export function createPelvisRetargeter(
 
     actualX: 0,
     actualY: 0,
+
+    rootName: motionRoot.name,
+    rootScale:
+      motionRoot.scale.toArray(),
+    hipsLocal:
+      hips.position.toArray(),
+    hipsWorld: [0, 0, 0],
 
     torsoLength:
       characterTorsoLength
@@ -208,12 +233,12 @@ export function createPelvisRetargeter(
     );
 
     // 캐릭터 root 위치 초기화
-    character.model.position.copy(
-      modelRestPosition
+    motionRoot.position.copy(
+      rootRestPosition
     );
 
-    modelTargetPosition.copy(
-      modelRestPosition
+    rootTargetPosition.copy(
+      rootRestPosition
     );
 
     character.model.updateMatrixWorld(
@@ -246,6 +271,15 @@ export function createPelvisRetargeter(
       'move scale:',
       MOVE_SCALE
     );
+
+    console.log('motion root:', {
+      name: motionRoot.name,
+      parent: motionRoot.parent?.name,
+      scale: motionRoot.scale.toArray(),
+      position: motionRoot.position.toArray(),
+      hipsLocal: hips.position.toArray(),
+      hipsWorld: hipsWorldPosition.toArray()
+    });
 
     console.log(
       '=============================='
@@ -326,14 +360,23 @@ export function createPelvisRetargeter(
     // Z는 지금 건드리지 않는다.
     // =================================================
 
-    modelTargetPosition.set(
-      modelRestPosition.x +
-        moveX,
+    // moveX/moveY는 Three world 단위다. root parent에 scale/rotation이
+    // 있어도 정확하도록 목표 world 위치를 parent-local로 변환한다.
+    const targetWorld =
+      rootRestWorldPosition
+        .clone()
+        .add(
+          new THREE.Vector3(
+            moveX,
+            moveY,
+            0
+          )
+        );
 
-      modelRestPosition.y +
-        moveY,
-
-      modelRestPosition.z
+    rootTargetPosition.copy(
+      motionRoot.parent.worldToLocal(
+        targetWorld
+      )
     );
 
     // =================================================
@@ -359,10 +402,10 @@ export function createPelvisRetargeter(
       moveY;
 
     debug.targetX =
-      modelTargetPosition.x;
+      rootTargetPosition.x;
 
     debug.targetY =
-      modelTargetPosition.y;
+      rootTargetPosition.y;
   }
 
   // =====================================================
@@ -375,8 +418,8 @@ export function createPelvisRetargeter(
     }
 
     // ⭐ 캐릭터 전체 root 이동
-    character.model.position.lerp(
-      modelTargetPosition,
+    motionRoot.position.lerp(
+      rootTargetPosition,
       POSITION_SMOOTHING
     );
 
@@ -385,10 +428,20 @@ export function createPelvisRetargeter(
     );
 
     debug.actualX =
-      character.model.position.x;
+      motionRoot.position.x;
 
     debug.actualY =
-      character.model.position.y;
+      motionRoot.position.y;
+
+    const currentHipsWorld =
+      new THREE.Vector3();
+
+    hips.getWorldPosition(
+      currentHipsWorld
+    );
+
+    debug.hipsWorld =
+      currentHipsWorld.toArray();
   }
 
   // =====================================================
@@ -404,12 +457,12 @@ export function createPelvisRetargeter(
       0
     );
 
-    character.model.position.copy(
-      modelRestPosition
+    motionRoot.position.copy(
+      rootRestPosition
     );
 
-    modelTargetPosition.copy(
-      modelRestPosition
+    rootTargetPosition.copy(
+      rootRestPosition
     );
 
     character.model.updateMatrixWorld(
@@ -426,16 +479,16 @@ export function createPelvisRetargeter(
     debug.moveY = 0;
 
     debug.targetX =
-      modelRestPosition.x;
+      rootRestPosition.x;
 
     debug.targetY =
-      modelRestPosition.y;
+      rootRestPosition.y;
 
     debug.actualX =
-      modelRestPosition.x;
+      rootRestPosition.x;
 
     debug.actualY =
-      modelRestPosition.y;
+      rootRestPosition.y;
   }
 
   // =====================================================

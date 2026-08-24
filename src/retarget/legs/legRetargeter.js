@@ -160,18 +160,11 @@ export function createLegRetargeter(
       true
     );
 
-    const hipPos =
-      new THREE.Vector3();
-
     const kneePos =
       new THREE.Vector3();
 
     const anklePos =
       new THREE.Vector3();
-
-    upperLeg.getWorldPosition(
-      hipPos
-    );
 
     leg.getWorldPosition(
       kneePos
@@ -181,14 +174,7 @@ export function createLegRetargeter(
       anklePos
     );
 
-    const thighDirection =
-      new THREE.Vector3()
-        .subVectors(
-          kneePos,
-          hipPos
-        )
-        .normalize();
-
+    // Foot의 bind/rest 위치가 이 모델에서 Leg의 실제 길이 축이다.
     const shinDirection =
       new THREE.Vector3()
         .subVectors(
@@ -197,61 +183,102 @@ export function createLegRetargeter(
         )
         .normalize();
 
-    /*
-      thigh와 shin이 만드는 평면의 normal.
-      이 축을 중심으로 무릎이 접힌다고 본다.
-    */
-    const axisWorld =
-      new THREE.Vector3()
-        .crossVectors(
-          thighDirection,
-          shinDirection
-        );
+    // Foot -> ToeBase의 bind 방향은 이 skeleton 자체가 정의하는
+    // 캐릭터 앞쪽이다. body-frame cross product의 부호를 앞/뒤로
+    // 추측하지 않고 실제 발 hierarchy에서 뒤쪽을 구한다.
+    const toe = foot.children.find(
+      (child) =>
+        child.name.includes('ToeBase')
+    );
 
-    /*
-      T-pose에서 거의 완전히 일자인 경우
-      cross가 0에 가까울 수 있으므로
-      fallback 축 사용.
-    */
-    if (
-      axisWorld.lengthSq() <
-      0.000001
-    ) {
-      axisWorld.set(
-        1,
-        0,
-        0
-      );
-
-      /*
-        Character body frame의 local X축을
-        world 방향으로 변환.
-      */
-      axisWorld.transformDirection(
-        characterBodyFrame
+    if (!toe) {
+      throw new Error(
+        `${foot.name}: ToeBase bone을 찾지 못했습니다.`
       );
     }
 
-    axisWorld.normalize();
+    const toePosition =
+      new THREE.Vector3();
 
-    /*
-      world axis
-      → Leg parent local axis
-    */
-    const parentWorldQuaternion =
-      new THREE.Quaternion();
-
-    leg.parent.getWorldQuaternion(
-      parentWorldQuaternion
+    toe.getWorldPosition(
+      toePosition
     );
 
-    return axisWorld
+    const footForwardWorld =
+      toePosition
+        .sub(anklePos)
+        .normalize();
+
+    const backwardWorld =
+      footForwardWorld.negate();
+
+    const bendDirection =
+      backwardWorld
+        .clone()
+        .addScaledVector(
+          shinDirection,
+          -backwardWorld.dot(
+            shinDirection
+          )
+        );
+
+    if (bendDirection.lengthSq() < 0.000001) {
+      throw new Error(
+        `${leg.name}: bind pose에서 knee bend plane을 계산할 수 없습니다.`
+      );
+    }
+
+    bendDirection.normalize();
+
+    // axis × shin = backward가 되도록 부호까지 bind pose에서 유도한다.
+    const axisWorld =
+      new THREE.Vector3()
+        .crossVectors(
+          shinDirection,
+          bendDirection
+        )
+        .normalize();
+
+    // 아래 update()는 restQuaternion * hingeQuaternion 순서다.
+    // 따라서 hinge axis도 parent-local이 아닌 Leg bone-local이어야 한다.
+    const legWorldQuaternion =
+      new THREE.Quaternion();
+
+    leg.getWorldQuaternion(
+      legWorldQuaternion
+    );
+
+    const axisLocal = axisWorld
       .applyQuaternion(
-        parentWorldQuaternion
+        legWorldQuaternion
           .clone()
           .invert()
       )
       .normalize();
+
+    console.log(
+      `[Knee bind] ${leg.name}`,
+      {
+        upperLeg: upperLeg.name,
+        foot: foot.name,
+        toe: toe.name,
+        shinLocal: foot.position
+          .clone()
+          .normalize()
+          .toArray(),
+        footForwardWorld:
+          backwardWorld
+            .clone()
+            .negate()
+            .toArray(),
+        hingeAxisLocal:
+          axisLocal.toArray(),
+        restQuaternion:
+          leg.quaternion.toArray()
+      }
+    );
+
+    return axisLocal;
   }
 
   function calibrate(
