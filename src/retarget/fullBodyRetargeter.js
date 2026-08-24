@@ -10,6 +10,10 @@ import {
   createPelvisRetargeter
 } from './pelvis/pelvisRetargeter.js';
 
+import {
+  createRootOrientationRetargeter
+} from './root/rootOrientationRetargeter.js';
+
 export function createFullBodyRetargeter(
   character
 ) {
@@ -25,6 +29,11 @@ export function createFullBodyRetargeter(
 
   const pelvis =
     createPelvisRetargeter(
+      character
+    );
+
+  const rootOrientation =
+    createRootOrientationRetargeter(
       character
     );
 
@@ -49,10 +58,16 @@ export function createFullBodyRetargeter(
         landmarks
       );
 
+    const rootOrientationSuccess =
+      rootOrientation.calibrate(
+        worldLandmarks
+      );
+
     calibrated =
       armSuccess &&
       legSuccess &&
-      pelvisSuccess;
+      pelvisSuccess &&
+      rootOrientationSuccess;
 
     console.log(
       'Arm:',
@@ -69,6 +84,11 @@ export function createFullBodyRetargeter(
       pelvisSuccess
     );
 
+    console.log(
+      'Root orientation:',
+      rootOrientationSuccess
+    );
+
     return calibrated;
   }
 
@@ -79,6 +99,18 @@ export function createFullBodyRetargeter(
     if (!calibrated) {
       return;
     }
+
+    rootOrientation.setPose(
+      worldLandmarks
+    );
+
+    // Limb target은 이번 frame에 실제 적용된 root orientation을
+    // 기준으로 계산해야 root yaw를 parent inverse가 상쇄하지 않는다.
+    rootOrientation.update();
+
+    character.model.updateMatrixWorld(
+      true
+    );
 
     pelvis.setPose(
       landmarks
@@ -121,6 +153,7 @@ export function createFullBodyRetargeter(
     arms.reset();
     legs.reset();
     pelvis.reset();
+    rootOrientation.reset();
 
     calibrated = false;
   }
@@ -134,7 +167,9 @@ export function createFullBodyRetargeter(
     getDebugState() {
       return {
         pelvis:
-          pelvis.getDebugState()
+          pelvis.getDebugState(),
+        rootOrientation:
+          rootOrientation.getDebugState()
       };
     },
 

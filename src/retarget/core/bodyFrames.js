@@ -65,52 +65,30 @@ function createFrame(
   return frame;
 }
 
-// =====================================================
-// Upper Body Frame
-// =====================================================
-
-export function createUpperBodyFrame(
+export function createBodyFrameState(
   worldLandmarks
 ) {
-  const LS =
-    worldLandmarks?.[MP.LEFT_SHOULDER];
-
-  const RS =
-    worldLandmarks?.[MP.RIGHT_SHOULDER];
-
-  const LH =
-    worldLandmarks?.[MP.LEFT_HIP];
-
-  const RH =
-    worldLandmarks?.[MP.RIGHT_HIP];
+  const LS = worldLandmarks?.[MP.LEFT_SHOULDER];
+  const RS = worldLandmarks?.[MP.RIGHT_SHOULDER];
+  const LH = worldLandmarks?.[MP.LEFT_HIP];
+  const RH = worldLandmarks?.[MP.RIGHT_HIP];
 
   if (!LS || !RS || !LH || !RH) {
     return null;
   }
 
-  const leftShoulder =
-    landmarkToVector3(LS);
+  const leftShoulder = landmarkToVector3(LS);
+  const rightShoulder = landmarkToVector3(RS);
+  const leftHip = landmarkToVector3(LH);
+  const rightHip = landmarkToVector3(RH);
 
-  const rightShoulder =
-    landmarkToVector3(RS);
+  const shoulderRight = rightShoulder
+    .clone()
+    .sub(leftShoulder);
 
-  const leftHip =
-    landmarkToVector3(LH);
-
-  const rightHip =
-    landmarkToVector3(RH);
-
-  const shoulderRight =
-    new THREE.Vector3().subVectors(
-      rightShoulder,
-      leftShoulder
-    );
-
-  const hipRight =
-    new THREE.Vector3().subVectors(
-      rightHip,
-      leftHip
-    );
+  const hipRight = rightHip
+    .clone()
+    .sub(leftHip);
 
   if (
     shoulderRight.lengthSq() < EPSILON ||
@@ -119,37 +97,63 @@ export function createUpperBodyFrame(
     return null;
   }
 
-  shoulderRight.normalize();
-  hipRight.normalize();
+  const bodyRight = shoulderRight
+    .normalize()
+    .add(hipRight.normalize());
 
-  const right =
-    new THREE.Vector3().addVectors(
-      shoulderRight,
-      hipRight
-    );
-
-  const shoulderCenter =
-    midpoint3D(
-      leftShoulder,
-      rightShoulder
-    );
-
-  const hipCenter =
-    midpoint3D(
-      leftHip,
-      rightHip
-    );
-
-  const up =
-    new THREE.Vector3().subVectors(
-      shoulderCenter,
-      hipCenter
-    );
-
-  return createFrame(
-    right,
-    up
+  const shoulderCenter = midpoint3D(
+    leftShoulder,
+    rightShoulder
   );
+
+  const hipCenter = midpoint3D(
+    leftHip,
+    rightHip
+  );
+
+  const bodyUp = shoulderCenter
+    .clone()
+    .sub(hipCenter);
+
+  const matrix = createFrame(
+    bodyRight,
+    bodyUp
+  );
+
+  if (!matrix) {
+    return null;
+  }
+
+  const bodyRightFinal = new THREE.Vector3();
+  const bodyUpFinal = new THREE.Vector3();
+  const bodyFront = new THREE.Vector3();
+
+  matrix.extractBasis(
+    bodyRightFinal,
+    bodyUpFinal,
+    bodyFront
+  );
+
+  return {
+    bodyRight: bodyRightFinal.normalize(),
+    bodyUp: bodyUpFinal.normalize(),
+    bodyFront: bodyFront.normalize(),
+    bodyQuaternion: new THREE.Quaternion()
+      .setFromRotationMatrix(matrix),
+    matrix
+  };
+}
+
+// =====================================================
+// Upper Body Frame
+// =====================================================
+
+export function createUpperBodyFrame(
+  worldLandmarks
+) {
+  return createBodyFrameState(
+    worldLandmarks
+  )?.matrix ?? null;
 }
 
 // =====================================================

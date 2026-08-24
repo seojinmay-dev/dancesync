@@ -120,7 +120,7 @@ export function createArmRetargeter(
     }
   };
 
-  const characterBodyFrame =
+  const restCharacterBodyFrame =
     createCharacterBodyFrame(
       character
     );
@@ -135,7 +135,7 @@ export function createArmRetargeter(
       createDirectionState(
         character,
         config,
-        characterBodyFrame
+        restCharacterBodyFrame
       );
   }
 
@@ -204,6 +204,11 @@ export function createArmRetargeter(
     if (!frame) {
       return;
     }
+
+    const characterBodyFrame =
+      createCharacterBodyFrame(
+        character
+      );
 
     for (
       const [key, config]

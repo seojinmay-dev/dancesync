@@ -8,6 +8,10 @@ import {
   midpoint2D
 } from '../core/retargetMath3D.js';
 
+import {
+  findCharacterMotionRoot
+} from '../core/characterRoot.js';
+
 export function createPelvisRetargeter(
   character
 ) {
@@ -42,26 +46,8 @@ export function createPelvisRetargeter(
 
   // Hips와 모든 SkinnedMesh를 함께 포함하는 가장 가까운 조상을 찾는다.
   // X Bot GLB에서는 Scene wrapper가 아니라 scale 0.01의 Armature다.
-  let motionRoot = hips;
-
-  while (motionRoot.parent) {
-    motionRoot = motionRoot.parent;
-
-    let hasSkinnedMesh = false;
-    motionRoot.traverse((object) => {
-      hasSkinnedMesh ||= object.isSkinnedMesh === true;
-    });
-
-    if (hasSkinnedMesh) {
-      break;
-    }
-  }
-
-  if (!motionRoot.parent) {
-    throw new Error(
-      'Hips와 SkinnedMesh의 공통 motion root를 찾지 못했습니다.'
-    );
-  }
+  const motionRoot =
+    findCharacterMotionRoot(character);
 
   const rootRestPosition =
     motionRoot.position.clone();

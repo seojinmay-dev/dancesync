@@ -67,7 +67,7 @@ export function createLegRetargeter(
     }
   };
 
-  const characterBodyFrame =
+  const restCharacterBodyFrame =
     createCharacterBodyFrame(
       character
     );
@@ -82,7 +82,7 @@ export function createLegRetargeter(
       createDirectionState(
         character,
         config,
-        characterBodyFrame
+        restCharacterBodyFrame
       );
   }
 
@@ -468,6 +468,11 @@ export function createLegRetargeter(
     if (!frame) {
       return;
     }
+
+    const characterBodyFrame =
+      createCharacterBodyFrame(
+        character
+      );
 
     for (
       const [key, config]
