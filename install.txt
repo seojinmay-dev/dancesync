@@ -1,0 +1,10 @@
+conda activate dance
+
+npm create vite@latest dancesync
+Framework: Vanilla
+Variant: JavaScript
+
+cd dancesync
+npm install
+npm install three
+npm run dev
