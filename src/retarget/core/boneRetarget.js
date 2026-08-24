@@ -174,14 +174,14 @@ export function createDirectionState(
 
 export function getUserDirectionLocal(
   config,
-  worldLandmarks,
+  pose,
   bodyFrame
 ) {
   const from =
-    worldLandmarks?.[config.fromIndex];
+    pose?.joints?.[config.fromJoint];
 
   const to =
-    worldLandmarks?.[config.toIndex];
+    pose?.joints?.[config.toJoint];
 
   const direction =
     getDirection3D(
@@ -213,13 +213,13 @@ export function getUserDirectionLocal(
 export function calibrateDirectionBone(
   config,
   state,
-  worldLandmarks,
+  pose,
   bodyFrame
 ) {
   const neutral =
     getUserDirectionLocal(
       config,
-      worldLandmarks,
+      pose,
       bodyFrame
     );
 
@@ -248,7 +248,7 @@ export function updateDirectionBoneTarget(
   character,
   config,
   state,
-  worldLandmarks,
+  pose,
   bodyFrame,
   characterBodyFrame
 ) {
@@ -259,7 +259,7 @@ export function updateDirectionBoneTarget(
   const currentDirection =
     getUserDirectionLocal(
       config,
-      worldLandmarks,
+      pose,
       bodyFrame
     );
 
@@ -281,6 +281,23 @@ export function updateDirectionBoneTarget(
         userDelta
       )
       .normalize();
+
+  if (
+    config.preserveBodyFrontDepth &&
+    config.depthConstraintActive
+  ) {
+    // 기존 XY direction quaternion은 유지하고, calibration 대비
+    // bodyFront 성분만 명시적으로 보존한다. neutral에서는 정확히
+    // Mixamo rest depth로 돌아간다.
+    targetBodyDirection.z =
+      state.restDirectionBody.z +
+      (
+        currentDirection.z -
+        state.neutralUserDirection.z
+      );
+
+    targetBodyDirection.normalize();
+  }
 
   const targetWorldDirection =
     targetBodyDirection

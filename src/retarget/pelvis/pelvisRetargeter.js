@@ -1,16 +1,12 @@
 import * as THREE from 'three';
 
 import {
-  MP
-} from '../core/skeletonMap.js';
-
-import {
-  midpoint2D
-} from '../core/retargetMath3D.js';
-
-import {
   findCharacterMotionRoot
 } from '../core/characterRoot.js';
+
+import {
+  getKneeBend
+} from '../core/retargetMath3D.js';
 
 export function createPelvisRetargeter(
   character
@@ -58,6 +54,15 @@ export function createPelvisRetargeter(
   const rootRestWorldPosition =
     new THREE.Vector3();
 
+  const leftUpLeg = character.bones.leftUpLeg;
+  const rightUpLeg = character.bones.rightUpLeg;
+  const leftFoot = character.model.getObjectByName('mixamorigLeftFoot');
+  const rightFoot = character.model.getObjectByName('mixamorigRightFoot');
+
+  if (!leftFoot || !rightFoot) {
+    throw new Error('Pelvis constraint용 Foot bone을 찾지 못했습니다.');
+  }
+
   // =====================================================
   // Calibration
   // =====================================================
@@ -67,6 +72,9 @@ export function createPelvisRetargeter(
 
   let calibrated =
     false;
+
+  let neutralLeftKneeBend = 0;
+  let neutralRightKneeBend = 0;
 
   // =====================================================
   // Character Scale
@@ -104,6 +112,24 @@ export function createPelvisRetargeter(
       ),
       0.001
     );
+
+  const leftHipWorld = new THREE.Vector3();
+  const rightHipWorld = new THREE.Vector3();
+  const leftFootWorld = new THREE.Vector3();
+  const rightFootWorld = new THREE.Vector3();
+
+  leftUpLeg.getWorldPosition(leftHipWorld);
+  rightUpLeg.getWorldPosition(rightHipWorld);
+  leftFoot.getWorldPosition(leftFootWorld);
+  rightFoot.getWorldPosition(rightFootWorld);
+
+  const characterLegLength = Math.max(
+    (
+      leftHipWorld.distanceTo(leftFootWorld) +
+      rightHipWorld.distanceTo(rightFootWorld)
+    ) * 0.5,
+    0.001
+  );
 
   // =====================================================
   // Movement Scale
@@ -152,7 +178,10 @@ export function createPelvisRetargeter(
     hipsWorld: [0, 0, 0],
 
     torsoLength:
-      characterTorsoLength
+      characterTorsoLength,
+    rawMoveY: 0,
+    maxSquatDrop: 0,
+    bilateralKneeBend: 0
   };
 
   // =====================================================
@@ -167,29 +196,9 @@ export function createPelvisRetargeter(
   // =====================================================
 
   function getHipCenter(
-    landmarks
+    pose
   ) {
-    const leftHip =
-      landmarks?.[
-        MP.LEFT_HIP
-      ];
-
-    const rightHip =
-      landmarks?.[
-        MP.RIGHT_HIP
-      ];
-
-    if (
-      !leftHip ||
-      !rightHip
-    ) {
-      return null;
-    }
-
-    return midpoint2D(
-      leftHip,
-      rightHip
-    );
+    return pose?.root?.screenPosition ?? null;
   }
 
   // =====================================================
@@ -197,11 +206,11 @@ export function createPelvisRetargeter(
   // =====================================================
 
   function calibrate(
-    landmarks
+    pose
   ) {
     const center =
       getHipCenter(
-        landmarks
+        pose
       );
 
     if (!center) {
@@ -217,6 +226,18 @@ export function createPelvisRetargeter(
     neutralHipCenter.copy(
       center
     );
+
+    neutralLeftKneeBend = getKneeBend(
+      pose.joints.leftHip,
+      pose.joints.leftKnee,
+      pose.joints.leftAnkle
+    ) ?? 0;
+
+    neutralRightKneeBend = getKneeBend(
+      pose.joints.rightHip,
+      pose.joints.rightKnee,
+      pose.joints.rightAnkle
+    ) ?? 0;
 
     // 캐릭터 root 위치 초기화
     motionRoot.position.copy(
@@ -279,7 +300,7 @@ export function createPelvisRetargeter(
   // =====================================================
 
   function setPose(
-    landmarks
+    pose
   ) {
     if (!calibrated) {
       return;
@@ -287,7 +308,7 @@ export function createPelvisRetargeter(
 
     const center =
       getHipCenter(
-        landmarks
+        pose
       );
 
     if (!center) {
@@ -336,9 +357,43 @@ export function createPelvisRetargeter(
     // 따라서 -dy
     // =================================================
 
-    const moveY =
+    const rawMoveY =
       -dy *
       MOVE_SCALE;
+
+    const leftKneeBend = Math.max(
+      0,
+      (getKneeBend(
+        pose.joints.leftHip,
+        pose.joints.leftKnee,
+        pose.joints.leftAnkle
+      ) ?? neutralLeftKneeBend) - neutralLeftKneeBend
+    );
+
+    const rightKneeBend = Math.max(
+      0,
+      (getKneeBend(
+        pose.joints.rightHip,
+        pose.joints.rightKnee,
+        pose.joints.rightAnkle
+      ) ?? neutralRightKneeBend) - neutralRightKneeBend
+    );
+
+    const bilateralKneeBend = Math.min(
+      leftKneeBend,
+      rightKneeBend
+    );
+
+    // Equal-length 2-link leg의 굽힘에 따른 높이 감소량이다.
+    // 화면 hip Y가 이 기하학적 압축량보다 root를 더 내리지 못하게 한다.
+    const maxSquatDrop = characterLegLength * (
+      1 - Math.cos(bilateralKneeBend * 0.5)
+    );
+
+    const moveY = Math.max(
+      rawMoveY,
+      -maxSquatDrop
+    );
 
     // =================================================
     // Model Target Position
@@ -386,6 +441,10 @@ export function createPelvisRetargeter(
 
     debug.moveY =
       moveY;
+
+    debug.rawMoveY = rawMoveY;
+    debug.maxSquatDrop = maxSquatDrop;
+    debug.bilateralKneeBend = bilateralKneeBend;
 
     debug.targetX =
       rootTargetPosition.x;
@@ -475,6 +534,10 @@ export function createPelvisRetargeter(
 
     debug.actualY =
       rootRestPosition.y;
+
+    debug.rawMoveY = 0;
+    debug.maxSquatDrop = 0;
+    debug.bilateralKneeBend = 0;
   }
 
   // =====================================================

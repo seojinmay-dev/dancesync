@@ -40,27 +40,26 @@ export function createFullBodyRetargeter(
   let calibrated = false;
 
   function calibrate(
-    worldLandmarks,
-    landmarks
+    pose
   ) {
     const armSuccess =
       arms.calibrate(
-        worldLandmarks
+        pose
       );
 
     const legSuccess =
       legs.calibrate(
-        worldLandmarks
+        pose
       );
 
     const pelvisSuccess =
       pelvis.calibrate(
-        landmarks
+        pose
       );
 
     const rootOrientationSuccess =
       rootOrientation.calibrate(
-        worldLandmarks
+        pose
       );
 
     calibrated =
@@ -93,15 +92,14 @@ export function createFullBodyRetargeter(
   }
 
   function setPose(
-    worldLandmarks,
-    landmarks
+    pose
   ) {
     if (!calibrated) {
       return;
     }
 
     rootOrientation.setPose(
-      worldLandmarks
+      pose
     );
 
     // Limb target은 이번 frame에 실제 적용된 root orientation을
@@ -113,15 +111,15 @@ export function createFullBodyRetargeter(
     );
 
     pelvis.setPose(
-      landmarks
+      pose
     );
 
     arms.setPose(
-      worldLandmarks
+      pose
     );
 
     legs.setPose(
-      worldLandmarks
+      pose
     );
   }
 
@@ -166,6 +164,8 @@ export function createFullBodyRetargeter(
 
     getDebugState() {
       return {
+        arms:
+          arms.getDebugState(),
         pelvis:
           pelvis.getDebugState(),
         rootOrientation:

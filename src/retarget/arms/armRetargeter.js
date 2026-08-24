@@ -1,8 +1,4 @@
 import {
-  MP
-} from '../core/skeletonMap.js';
-
-import {
   createUpperBodyFrame,
   createFrameSmoother
 } from '../core/bodyFrames.js';
@@ -10,6 +6,7 @@ import {
 import {
   createCharacterBodyFrame,
   createDirectionState,
+  getUserDirectionLocal,
   calibrateDirectionBone,
   updateDirectionBoneTarget,
   applyDirectionBone,
@@ -46,11 +43,11 @@ export function createArmRetargeter(
       childBone:
         character.bones.rightForeArm,
 
-      fromIndex:
-        MP.LEFT_SHOULDER,
+      fromJoint:
+        'leftShoulder',
 
-      toIndex:
-        MP.LEFT_ELBOW,
+      toJoint:
+        'leftElbow',
 
       group:
         'upperArm',
@@ -66,14 +63,17 @@ export function createArmRetargeter(
       childBone:
         rightHand,
 
-      fromIndex:
-        MP.LEFT_ELBOW,
+      fromJoint:
+        'leftElbow',
 
-      toIndex:
-        MP.LEFT_WRIST,
+      toJoint:
+        'leftWrist',
 
       group:
         'foreArm',
+
+      preserveBodyFrontDepth:
+        true,
 
       mirrorX:
         true
@@ -86,11 +86,11 @@ export function createArmRetargeter(
       childBone:
         character.bones.leftForeArm,
 
-      fromIndex:
-        MP.RIGHT_SHOULDER,
+      fromJoint:
+        'rightShoulder',
 
-      toIndex:
-        MP.RIGHT_ELBOW,
+      toJoint:
+        'rightElbow',
 
       group:
         'upperArm',
@@ -106,14 +106,17 @@ export function createArmRetargeter(
       childBone:
         leftHand,
 
-      fromIndex:
-        MP.RIGHT_ELBOW,
+      fromJoint:
+        'rightElbow',
 
-      toIndex:
-        MP.RIGHT_WRIST,
+      toJoint:
+        'rightWrist',
 
       group:
         'foreArm',
+
+      preserveBodyFrontDepth:
+        true,
 
       mirrorX:
         true
@@ -147,12 +150,83 @@ export function createArmRetargeter(
   let calibrated =
     false;
 
+  const debug = {};
+
+  function updateArmPlaneDebug(
+    key,
+    upperConfig,
+    foreConfig,
+    pose,
+    bodyFrame,
+    foreState
+  ) {
+    const upperDirection =
+      getUserDirectionLocal(
+        upperConfig,
+        pose,
+        bodyFrame
+      );
+
+    const foreDirection =
+      getUserDirectionLocal(
+        foreConfig,
+        pose,
+        bodyFrame
+      );
+
+    if (!upperDirection || !foreDirection) {
+      return false;
+    }
+
+    const armPlaneNormal =
+      new THREE.Vector3()
+        .crossVectors(
+          upperDirection,
+          foreDirection
+        );
+
+    const planeIsStable =
+      armPlaneNormal.lengthSq() >= 0.0025;
+
+    if (planeIsStable) {
+      armPlaneNormal.normalize();
+    }
+
+    const depthDelta =
+      foreDirection.z -
+      foreState.neutralUserDirection.z;
+
+    debug[key] = {
+      upperArmDirectionLocal:
+        upperDirection.toArray(),
+      foreArmDirectionLocal:
+        foreDirection.toArray(),
+      armPlaneNormalLocal:
+        armPlaneNormal.toArray(),
+      planeFrontDot:
+        planeIsStable
+          ? armPlaneNormal.z
+          : null,
+      frontBack:
+        Math.abs(depthDelta) < 0.02
+          ? 'neutral'
+          : depthDelta > 0
+            ? 'body-front +Z'
+            : 'body-back -Z',
+      depthDelta,
+      targetQuaternion:
+        foreState.targetQuaternion.toArray()
+    };
+
+    return planeIsStable;
+  }
+
   function calibrate(
-    worldLandmarks
+    pose
   ) {
     const frame =
       createUpperBodyFrame(
-        worldLandmarks
+        pose
       );
 
     if (!frame) {
@@ -167,7 +241,7 @@ export function createArmRetargeter(
         calibrateDirectionBone(
           config,
           states[key],
-          worldLandmarks,
+          pose,
           frame
         );
 
@@ -185,7 +259,7 @@ export function createArmRetargeter(
   }
 
   function setPose(
-    worldLandmarks
+    pose
   ) {
     if (!calibrated) {
       return;
@@ -193,7 +267,7 @@ export function createArmRetargeter(
 
     const rawFrame =
       createUpperBodyFrame(
-        worldLandmarks
+        pose
       );
 
     const frame =
@@ -210,6 +284,26 @@ export function createArmRetargeter(
         character
       );
 
+    configs.userLeftForeArm.depthConstraintActive =
+      updateArmPlaneDebug(
+        'userLeft',
+        configs.userLeftUpperArm,
+        configs.userLeftForeArm,
+        pose,
+        frame,
+        states.userLeftForeArm
+      );
+
+    configs.userRightForeArm.depthConstraintActive =
+      updateArmPlaneDebug(
+        'userRight',
+        configs.userRightUpperArm,
+        configs.userRightForeArm,
+        pose,
+        frame,
+        states.userRightForeArm
+      );
+
     for (
       const [key, config]
       of Object.entries(configs)
@@ -218,11 +312,17 @@ export function createArmRetargeter(
         character,
         config,
         states[key],
-        worldLandmarks,
+        pose,
         frame,
         characterBodyFrame
       );
     }
+
+    debug.userLeft.targetQuaternion =
+      states.userLeftForeArm.targetQuaternion.toArray();
+
+    debug.userRight.targetQuaternion =
+      states.userRightForeArm.targetQuaternion.toArray();
   }
 
   function update() {
@@ -302,6 +402,11 @@ export function createArmRetargeter(
     calibrate,
     setPose,
     update,
-    reset
+    reset,
+
+    getDebugState() {
+      return debug;
+    }
   };
 }
+import * as THREE from 'three';

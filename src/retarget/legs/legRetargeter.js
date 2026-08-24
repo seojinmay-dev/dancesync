@@ -1,10 +1,6 @@
 import * as THREE from 'three';
 
 import {
-  MP
-} from '../core/skeletonMap.js';
-
-import {
   getKneeBend
 } from '../core/retargetMath3D.js';
 
@@ -39,11 +35,11 @@ export function createLegRetargeter(
       childBone:
         character.bones.rightLeg,
 
-      fromIndex:
-        MP.LEFT_HIP,
+      fromJoint:
+        'leftHip',
 
-      toIndex:
-        MP.LEFT_KNEE,
+      toJoint:
+        'leftKnee',
 
       mirrorX:
         true
@@ -56,11 +52,11 @@ export function createLegRetargeter(
       childBone:
         character.bones.leftLeg,
 
-      fromIndex:
-        MP.RIGHT_HIP,
+      fromJoint:
+        'rightHip',
 
-      toIndex:
-        MP.RIGHT_KNEE,
+      toJoint:
+        'rightKnee',
 
       mirrorX:
         true
@@ -125,6 +121,44 @@ export function createLegRetargeter(
 
   const leftLegRestQuaternion =
     leftLeg.quaternion.clone();
+
+  const rightFootRestQuaternion =
+    rightFoot.quaternion.clone();
+
+  const leftFootRestQuaternion =
+    leftFoot.quaternion.clone();
+
+  character.model.updateMatrixWorld(true);
+
+  const rightFootRestWorldQuaternion =
+    new THREE.Quaternion();
+
+  const leftFootRestWorldQuaternion =
+    new THREE.Quaternion();
+
+  rightFoot.getWorldQuaternion(
+    rightFootRestWorldQuaternion
+  );
+
+  leftFoot.getWorldQuaternion(
+    leftFootRestWorldQuaternion
+  );
+
+  const rightFootUpLocal =
+    new THREE.Vector3(0, 1, 0)
+      .applyQuaternion(
+        rightFootRestWorldQuaternion
+          .clone()
+          .invert()
+      );
+
+  const leftFootUpLocal =
+    new THREE.Vector3(0, 1, 0)
+      .applyQuaternion(
+        leftFootRestWorldQuaternion
+          .clone()
+          .invert()
+      );
 
   const rightKneeAxis =
     calculateKneeAxis(
@@ -282,11 +316,11 @@ export function createLegRetargeter(
   }
 
   function calibrate(
-    worldLandmarks
+    pose
   ) {
     const frame =
       createLowerBodyFrame(
-        worldLandmarks
+        pose
       );
 
     if (!frame) {
@@ -301,7 +335,7 @@ export function createLegRetargeter(
         !calibrateDirectionBone(
           config,
           states[key],
-          worldLandmarks,
+          pose,
           frame
         )
       ) {
@@ -311,28 +345,16 @@ export function createLegRetargeter(
 
     const leftBend =
       getKneeBend(
-        worldLandmarks[
-          MP.LEFT_HIP
-        ],
-        worldLandmarks[
-          MP.LEFT_KNEE
-        ],
-        worldLandmarks[
-          MP.LEFT_ANKLE
-        ]
+        pose.joints.leftHip,
+        pose.joints.leftKnee,
+        pose.joints.leftAnkle
       );
 
     const rightBend =
       getKneeBend(
-        worldLandmarks[
-          MP.RIGHT_HIP
-        ],
-        worldLandmarks[
-          MP.RIGHT_KNEE
-        ],
-        worldLandmarks[
-          MP.RIGHT_ANKLE
-        ]
+        pose.joints.rightHip,
+        pose.joints.rightKnee,
+        pose.joints.rightAnkle
       );
 
     if (
@@ -370,19 +392,13 @@ export function createLegRetargeter(
   }
 
   function updateKnees(
-    worldLandmarks
+    pose
   ) {
     const leftBend =
       getKneeBend(
-        worldLandmarks[
-          MP.LEFT_HIP
-        ],
-        worldLandmarks[
-          MP.LEFT_KNEE
-        ],
-        worldLandmarks[
-          MP.LEFT_ANKLE
-        ]
+        pose.joints.leftHip,
+        pose.joints.leftKnee,
+        pose.joints.leftAnkle
       );
 
     if (leftBend !== null) {
@@ -413,15 +429,9 @@ export function createLegRetargeter(
 
     const rightBend =
       getKneeBend(
-        worldLandmarks[
-          MP.RIGHT_HIP
-        ],
-        worldLandmarks[
-          MP.RIGHT_KNEE
-        ],
-        worldLandmarks[
-          MP.RIGHT_ANKLE
-        ]
+        pose.joints.rightHip,
+        pose.joints.rightKnee,
+        pose.joints.rightAnkle
       );
 
     if (rightBend !== null) {
@@ -452,7 +462,7 @@ export function createLegRetargeter(
   }
 
   function setPose(
-    worldLandmarks
+    pose
   ) {
     if (!calibrated) {
       return;
@@ -461,7 +471,7 @@ export function createLegRetargeter(
     const frame =
       frameSmoother.update(
         createLowerBodyFrame(
-          worldLandmarks
+          pose
         )
       );
 
@@ -482,14 +492,14 @@ export function createLegRetargeter(
         character,
         config,
         states[key],
-        worldLandmarks,
+        pose,
         frame,
         characterBodyFrame
       );
     }
 
     updateKnees(
-      worldLandmarks
+      pose
     );
   }
 
@@ -568,6 +578,85 @@ export function createLegRetargeter(
     character.model.updateMatrixWorld(
       true
     );
+
+    const squatWeight = THREE.MathUtils.clamp(
+      Math.min(
+        currentRightKnee,
+        currentLeftKnee
+      ) / MAX_KNEE,
+      0,
+      1
+    );
+
+    stabilizeFoot(
+      rightFoot,
+      rightFootRestQuaternion,
+      rightFootUpLocal,
+      squatWeight
+    );
+
+    stabilizeFoot(
+      leftFoot,
+      leftFootRestQuaternion,
+      leftFootUpLocal,
+      squatWeight
+    );
+
+    character.model.updateMatrixWorld(true);
+  }
+
+  function stabilizeFoot(
+    foot,
+    restQuaternion,
+    restUpLocal,
+    squatWeight
+  ) {
+    const footWorldQuaternion =
+      new THREE.Quaternion();
+
+    foot.getWorldQuaternion(
+      footWorldQuaternion
+    );
+
+    const currentUpWorld = restUpLocal
+      .clone()
+      .applyQuaternion(
+        footWorldQuaternion
+      )
+      .normalize();
+
+    const levelDelta = new THREE.Quaternion()
+      .setFromUnitVectors(
+        currentUpWorld,
+        new THREE.Vector3(0, 1, 0)
+      );
+
+    const desiredWorldQuaternion = levelDelta
+      .multiply(footWorldQuaternion);
+
+    const parentWorldQuaternion =
+      new THREE.Quaternion();
+
+    foot.parent.getWorldQuaternion(
+      parentWorldQuaternion
+    );
+
+    const desiredLocalQuaternion =
+      parentWorldQuaternion
+        .invert()
+        .multiply(desiredWorldQuaternion);
+
+    const weightedTarget = restQuaternion
+      .clone()
+      .slerp(
+        desiredLocalQuaternion,
+        squatWeight
+      );
+
+    foot.quaternion.slerp(
+      weightedTarget,
+      0.18
+    );
   }
 
   function reset() {
@@ -591,6 +680,14 @@ export function createLegRetargeter(
 
     leftLeg.quaternion.copy(
       leftLegRestQuaternion
+    );
+
+    rightFoot.quaternion.copy(
+      rightFootRestQuaternion
+    );
+
+    leftFoot.quaternion.copy(
+      leftFootRestQuaternion
     );
 
     neutralLeftKnee = 0;

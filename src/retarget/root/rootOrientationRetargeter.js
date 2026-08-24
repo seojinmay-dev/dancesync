@@ -48,8 +48,8 @@ export function createRootOrientationRetargeter(
       : null;
   }
 
-  function calibrate(worldLandmarks) {
-    const frame = createBodyFrameState(worldLandmarks);
+  function calibrate(pose) {
+    const frame = createBodyFrameState(pose);
     const front = frame && horizontalFront(frame);
 
     if (!front) {
@@ -78,10 +78,10 @@ export function createRootOrientationRetargeter(
     return true;
   }
 
-  function setPose(worldLandmarks) {
+  function setPose(pose) {
     if (!calibrated) return;
 
-    const frame = createBodyFrameState(worldLandmarks);
+    const frame = createBodyFrameState(pose);
     const front = frame && horizontalFront(frame);
 
     if (!front) return;

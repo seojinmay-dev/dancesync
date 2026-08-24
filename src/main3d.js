@@ -16,6 +16,10 @@ import {
 } from './pose/poseLandmarker.js';
 
 import {
+  createMediaPipePoseAdapter
+} from './pose/adapters/mediaPipePoseAdapter.js';
+
+import {
   createFullBodyRetargeter
 } from './retarget/fullBodyRetargeter.js';
 
@@ -200,6 +204,9 @@ status.innerText =
 const poseLandmarker =
   await createPoseLandmarker();
 
+const mediaPipePoseAdapter =
+  createMediaPipePoseAdapter();
+
 // =====================================================
 // Webcam Start
 // =====================================================
@@ -218,10 +225,7 @@ status.innerText =
 // Pose State
 // =====================================================
 
-let latestLandmarks =
-  null;
-
-let latestWorldLandmarks =
+let latestPose =
   null;
 
 let lastVideoTime =
@@ -277,8 +281,7 @@ function startCalibration() {
       // ===============================================
 
       if (
-        !latestLandmarks ||
-        !latestWorldLandmarks
+        !latestPose
       ) {
         countdown.innerText =
           '✕';
@@ -297,8 +300,7 @@ function startCalibration() {
 
       const success =
         retargeter.calibrate(
-          latestWorldLandmarks,
-          latestLandmarks
+          latestPose
         );
 
       countdown.innerText =
@@ -420,15 +422,17 @@ function detectPose() {
     return;
   }
 
-  // ===================================================
-  // 최신 Pose 저장
-  // ===================================================
+  const pose = mediaPipePoseAdapter.convert(
+    landmarks,
+    worldLandmarks,
+    performance.now()
+  );
 
-  latestLandmarks =
-    landmarks;
+  if (!pose) {
+    return;
+  }
 
-  latestWorldLandmarks =
-    worldLandmarks;
+  latestPose = pose;
 
   // ===================================================
   // Retarget
@@ -438,8 +442,7 @@ function detectPose() {
     retargeter.isCalibrated()
   ) {
     retargeter.setPose(
-      worldLandmarks,
-      landmarks
+      pose
     );
 
     if (!countingDown) {

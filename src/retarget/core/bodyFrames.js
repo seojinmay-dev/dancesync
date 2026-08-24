@@ -1,13 +1,8 @@
 import * as THREE from 'three';
 
 import {
-  landmarkToVector3,
   midpoint3D
 } from './retargetMath3D.js';
-
-import {
-  MP
-} from './skeletonMap.js';
 
 const EPSILON = 0.000001;
 
@@ -66,81 +61,20 @@ function createFrame(
 }
 
 export function createBodyFrameState(
-  worldLandmarks
+  pose
 ) {
-  const LS = worldLandmarks?.[MP.LEFT_SHOULDER];
-  const RS = worldLandmarks?.[MP.RIGHT_SHOULDER];
-  const LH = worldLandmarks?.[MP.LEFT_HIP];
-  const RH = worldLandmarks?.[MP.RIGHT_HIP];
+  const bodyFrame = pose?.bodyFrame;
 
-  if (!LS || !RS || !LH || !RH) {
+  if (!bodyFrame) {
     return null;
   }
-
-  const leftShoulder = landmarkToVector3(LS);
-  const rightShoulder = landmarkToVector3(RS);
-  const leftHip = landmarkToVector3(LH);
-  const rightHip = landmarkToVector3(RH);
-
-  const shoulderRight = rightShoulder
-    .clone()
-    .sub(leftShoulder);
-
-  const hipRight = rightHip
-    .clone()
-    .sub(leftHip);
-
-  if (
-    shoulderRight.lengthSq() < EPSILON ||
-    hipRight.lengthSq() < EPSILON
-  ) {
-    return null;
-  }
-
-  const bodyRight = shoulderRight
-    .normalize()
-    .add(hipRight.normalize());
-
-  const shoulderCenter = midpoint3D(
-    leftShoulder,
-    rightShoulder
-  );
-
-  const hipCenter = midpoint3D(
-    leftHip,
-    rightHip
-  );
-
-  const bodyUp = shoulderCenter
-    .clone()
-    .sub(hipCenter);
-
-  const matrix = createFrame(
-    bodyRight,
-    bodyUp
-  );
-
-  if (!matrix) {
-    return null;
-  }
-
-  const bodyRightFinal = new THREE.Vector3();
-  const bodyUpFinal = new THREE.Vector3();
-  const bodyFront = new THREE.Vector3();
-
-  matrix.extractBasis(
-    bodyRightFinal,
-    bodyUpFinal,
-    bodyFront
-  );
 
   return {
-    bodyRight: bodyRightFinal.normalize(),
-    bodyUp: bodyUpFinal.normalize(),
-    bodyFront: bodyFront.normalize(),
-    bodyQuaternion: new THREE.Quaternion()
-      .setFromRotationMatrix(matrix),
-    matrix
+    bodyRight: bodyFrame.right,
+    bodyUp: bodyFrame.up,
+    bodyFront: bodyFrame.front,
+    bodyQuaternion: bodyFrame.quaternion,
+    matrix: bodyFrame.matrix
   };
 }
 
@@ -149,10 +83,10 @@ export function createBodyFrameState(
 // =====================================================
 
 export function createUpperBodyFrame(
-  worldLandmarks
+  pose
 ) {
   return createBodyFrameState(
-    worldLandmarks
+    pose
   )?.matrix ?? null;
 }
 
@@ -161,52 +95,33 @@ export function createUpperBodyFrame(
 // =====================================================
 
 export function createLowerBodyFrame(
-  worldLandmarks
+  pose
 ) {
-  const LS =
-    worldLandmarks?.[MP.LEFT_SHOULDER];
-
-  const RS =
-    worldLandmarks?.[MP.RIGHT_SHOULDER];
-
-  const LH =
-    worldLandmarks?.[MP.LEFT_HIP];
-
-  const RH =
-    worldLandmarks?.[MP.RIGHT_HIP];
+  const LS = pose?.joints?.leftShoulder;
+  const RS = pose?.joints?.rightShoulder;
+  const LH = pose?.joints?.leftHip;
+  const RH = pose?.joints?.rightHip;
 
   if (!LS || !RS || !LH || !RH) {
     return null;
   }
 
-  const leftShoulder =
-    landmarkToVector3(LS);
-
-  const rightShoulder =
-    landmarkToVector3(RS);
-
-  const leftHip =
-    landmarkToVector3(LH);
-
-  const rightHip =
-    landmarkToVector3(RH);
-
   const shoulderCenter =
     midpoint3D(
-      leftShoulder,
-      rightShoulder
+      LS,
+      RS
     );
 
   const hipCenter =
     midpoint3D(
-      leftHip,
-      rightHip
+      LH,
+      RH
     );
 
   const right =
     new THREE.Vector3().subVectors(
-      rightHip,
-      leftHip
+      RH,
+      LH
     );
 
   const up =
